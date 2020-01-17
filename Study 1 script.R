@@ -161,6 +161,35 @@ M4 <- lmer(Variance ~ Trait + Identity + (1|Participant), data = DataVar, REML =
 #the main effects whereas ":" only computes the interaction. 
 M5 <- lmer(Variance ~ Trait*Identity + (1|Participant), data = DataVar, REML = FALSE)
 
+
+####Testing model fit####
+
+#First need to convert Variance into numeric (but need to code as 1-17 for it 
+#to work). otherwise the geom_smooth won't plot a line. 
+
+levels(M5$Identity) <- c("1", "2", "3", "4", "5", "6", "7", "8", 
+                              "9", "10", "11", "12", "13", "14", "15", "16", "17")
+
+M5$Identity <- as.numeric(as.character(M5$Identity))
+
+#this centers the variable... this is important?
+M5$Variance <- scale(M5$Variance, center = TRUE, scale = TRUE)
+
+#this plots a regresion line for each trait
+  ggplot(M5, aes(x = Identity, y = Variance, colour = Trait)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ Trait)
+  
+#histogram and qqplot to test for normality of residuals for M5. 
+qqnorm(resid(M5))
+hist(residuals(M5))
+
+#Residual plot for homoscedasticity. 
+plot(fitted(M5),residuals(M5))
+
+##### Running the mixed model####
+
 #Here we run an analysis of variance to compare the fit of the different models.
 anova(M1, M2, M3, M4, M5)
 
