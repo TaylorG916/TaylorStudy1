@@ -1,4 +1,5 @@
-#####Data sorting before importing to R####
+
+# Data sorting prior to importing to R ------------------------------------
 
 #The experiment was conducting using Qualtrics software. Prior to importing 
 #the data into R, irrelevant columns were removed (Qualtrics exports lots 
@@ -16,7 +17,9 @@
 #negative test-retest correlations.Finally, an additional 6 participants were removed due 
 #to not  completing the experiment.
 
-#####Required packages####
+
+# Install and load packages -----------------------------------------------
+
 install.packages("tidyverse") #Data sorting
 install.packages("lme4") #mixed effects models
 install.packages("ggplot2") #Creating plots
@@ -27,7 +30,10 @@ install.packages("afex") #Adds p-values to mixed models
 install.packages("readxl") #allows for importing excel files
 install.packages("haven") #allows for importing SPSS files
 install.packages("scales") #Makes it easier to manipulate the y-axis for ggplots
+install.packages("devtools")
+remotes::install_github("krlmlr/here") #Here package
 
+library("devtools")
 library("tidyverse") 
 library("lme4")
 library("ggplot2")
@@ -38,16 +44,14 @@ library("afex")
 library("readxl")
 library("haven")
 library("scales")
+library("here")
 
-
-
-#####Import data and convert to long format####
+# Convert data from wide to long format -----------------------------------
 
 #Import data from excel and rename dataset.
-library(readxl)
-Facedata_retest_removed_ <- read_excel("Facedata (retest removed).xlsx")
-Facedata <- Facedata_retest_removed_
-View(Facedata)
+library("here")
+library("readxl")
+Facedata <- read_excel(here("1_Facedata_Wide.xlsx"))
 
 #Convert from wide to long format.
 #Currently the dataframe is in wide format and needs to be converted into long 
@@ -92,16 +96,12 @@ ifelse(Datalong$ImageID <= "MG020", 16, 17))))))))))))))))
 #This code will save the dataset as an excel spreadsheet.
 write.csv(Datalong, file = "Facedata long form.csv")
 
-#####Import data for mixed effects and create factors####
+
+# Set up data for mixed effects models  -----------------------------------
 
 #This will import a new dataset which includes the computed variability scores.
-#The data is on sheet 3 of the excel spreadsheet (named "Facedata long form).
 #The dataframe with the variance scores will be named "DataVar"
-library(readxl)
-Facedata_long_form_with_variance_removing_retest_final_1 <- read_excel("Facedata long form_with variance (removing retest final)-1.xlsx", 
-                                                                           sheet = "Facedata long form")
-DataVar <- Facedata_long_form_with_variance_removing_retest_final_1
-View(DataVar)
+DataVar <- read_excel(here("2_Variability_Long.xlsx"))
 
 #This will get rid of redundant columns 
 DataVar$ID <- NULL
@@ -129,8 +129,13 @@ levels(DataVar$Identity) <- c("FA", "FB", "FC", "FD", "FE", "FF", "FG", "FH",
                               "FI", "MA", "MB", "MC", "MD", "ME", "MF", "MG", "MH")
 
 
+write.csv(DataVar, file = "3_Mixed_Effects_Models.csv")
 
-#####Assessing variability across trait dimensions (using linear mixed effects)#### 
+# Mixed effects models ----------------------------------------------------
+
+DataVar <- read_excel(here("3_Mixed_Effects_Models.xlsx"))
+
+
 
 #Descriptive statistics across each trait
 describeBy(x = DataVar, group = DataVar$Trait)
@@ -162,33 +167,34 @@ M4 <- lmer(Variance ~ Trait + Identity + (1|Participant), data = DataVar, REML =
 M5 <- lmer(Variance ~ Trait*Identity + (1|Participant), data = DataVar, REML = FALSE)
 
 
-####Testing model fit####
+# Testing model fit -------------------------------------------------------
 
 #First need to convert Variance into numeric (but need to code as 1-17 for it 
 #to work). otherwise the geom_smooth won't plot a line. 
 
-levels(M5$Identity) <- c("1", "2", "3", "4", "5", "6", "7", "8", 
+levels(DataVar$Identity) <- c("1", "2", "3", "4", "5", "6", "7", "8", 
                               "9", "10", "11", "12", "13", "14", "15", "16", "17")
 
-M5$Identity <- as.numeric(as.character(M5$Identity))
+DataVar$Identity <- as.numeric(as.character(DataVar$Identity))
 
 #this centers the variable... this is important?
-M5$Variance <- scale(M5$Variance, center = TRUE, scale = TRUE)
+DataVar$Variance <- scale(DataVar$Variance, center = TRUE, scale = TRUE)
 
 #this plots a regresion line for each trait
-  ggplot(M5, aes(x = Identity, y = Variance, colour = Trait)) +
+  ggplot(DataVar, aes(x = Identity, y = Variance, colour = Trait)) +
   geom_point() +
   geom_smooth(method = "lm") +
   facet_wrap(~ Trait)
   
 #histogram and qqplot to test for normality of residuals for M5. 
-qqnorm(resid(M5))
+qqnorm(resid(M4))
+
 hist(residuals(M5))
 
 #Residual plot for homoscedasticity. 
 plot(fitted(M5),residuals(M5))
 
-##### Running the mixed model####
+# Running mixed effects models --------------------------------------------
 
 #Here we run an analysis of variance to compare the fit of the different models.
 anova(M1, M2, M3, M4, M5)
@@ -196,15 +202,14 @@ anova(M1, M2, M3, M4, M5)
 #This will give the output for the full model (M5)
 summary(M5)
 
-#####Plots ####
+# Plots -------------------------------------------------------------------
 
 #The first plot will show the rating scores rank ordered by mean identity scores
 
 #This dataset was created by aggregating scores across participants in order to 
 #get a single rating score for each image. 
-library(haven)
-Rank <- read_sav("Rank.sav")
-View(Rank)
+library("haven")
+Rank <- read_sav(here("4_Rank.sav"))
 
 #Make each categorical variable into a factor
 Rank$ImageID <- factor(Rank$ImageID)
@@ -236,10 +241,7 @@ ggplot(Rank) +
 #consists of an average variablity score for each identity on each trait. 
 
 #Import data
-library(haven)
-Variance_between_traits_collapsed_across_participants_ <- read_sav("Variance between traits(collapsed across participants).sav")
-VarCollapse <-Variance_between_traits_collapsed_across_participants_
-View(VarCollapse)
+VarCollapse <- read_sav(here("5_Between_Traits.sav"))
 
 #Make factors
 VarCollapse$Trait <- factor(VarCollapse$Trait)
@@ -251,12 +253,12 @@ ggplot(data = VarCollapse, aes(Identity, Variance_mean_mean, group = Trait, colo
   geom_line() +
   geom_point() +
   labs(x= "Identity", y = "Mean Variability Score") +
-  scale_y_continuous(limits = c(0, 1.5), breaks = pretty_breaks(n = 9)) +
+  scale_y_continuous(limits = c(0, 1.5), breaks = pretty_breaks(n = 9), name = "") +
   theme_bw() +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black")) +
   theme(legend.position = "bottom") 
 
-###Retest correlations####
+# Retest correlations -----------------------------------------------------
 
 #After completing the rating task, participants were asked to rate a subset of 
 #100 images (5 identities) a second time. This allows us to assess the consistency
@@ -264,11 +266,7 @@ ggplot(data = VarCollapse, aes(Identity, Variance_mean_mean, group = Trait, colo
 
 #Import the "Test and retest scores 1 (sheet 4)" dataset. The negative and zero
 #correlations were removed when screening for invalid cases. 
-
-Test_and_retest_scores_1 <- read_excel("Test-Retest/Test and retest scores-1.xlsx", 
-                                            sheet = "Sheet4")
-Retest <- Test_and_retest_scores_1
-View(Retest)
+Retest <- read_excel(here("6_Retest.xlsx"))
 
 #Make trait and participants into factors 
 Retest$Trait <- factor(Retest$Trait)
@@ -294,17 +292,6 @@ ggplot(Retest, aes(x = Correlation)) +
   theme_bw() +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black")) 
 
-
-
-###Unresolved issues####
-
-#1. When running the mixed effects models, M2 and M4 come out with the exact 
-#same values. I have no idea why this is happening. Nothing much seems to 
-#change this.
-
-#2. I don't know how to account for the fact that the images are nested within 
-#identities. I am not including the image IDs in the model so I don't know how I 
-#can account for this nesting without it being included in the model. 
 
 
 
