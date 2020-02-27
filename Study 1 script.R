@@ -166,6 +166,9 @@ M4 <- lmer(Variance ~ Trait + Identity + (1|Participant), data = DataVar, REML =
 #the main effects whereas ":" only computes the interaction. 
 M5 <- lmer(Variance ~ Trait*Identity + (1|Participant), data = DataVar, REML = FALSE)
 
+#Random slopes models. This will take a long time to process. 
+
+M6 <- lmer(Variance ~ Trait*Identity + (1 + Identity|Participant), data = DataVar, REML = FALSE)
 
 # Testing model fit -------------------------------------------------------
 
@@ -175,24 +178,46 @@ M5 <- lmer(Variance ~ Trait*Identity + (1|Participant), data = DataVar, REML = F
 levels(DataVar$Identity) <- c("1", "2", "3", "4", "5", "6", "7", "8", 
                               "9", "10", "11", "12", "13", "14", "15", "16", "17")
 
+#Does the data need to be numeric for geom_smooth?
 DataVar$Identity <- as.numeric(as.character(DataVar$Identity))
 
-#this centers the variable... this is important?
-DataVar$Variance <- scale(DataVar$Variance, center = TRUE, scale = TRUE)
+#This should plot a line for each model.
 
-#this plots a regresion line for each trait
-  ggplot(DataVar, aes(x = Identity, y = Variance, colour = Trait)) +
+#Geom_smooth isn't working. For some reason it won't plot the line
+ggplot(M5, aes(x = Identity, y = Variance, colour = Trait)) +
   geom_point() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~ Trait)
+  geom_smooth(method = lm) 
+
+#This does not look right at all
+ ggplot(M5, aes(x = Identity, y = Variance, colour = Trait)) +
+   geom_point() +
+   geom_abline() 
+
   
 #histogram and qqplot to test for normality of residuals for M5. 
-qqnorm(resid(M4))
+qqnorm(resid(M5))
 
 hist(residuals(M5))
 
 #Residual plot for homoscedasticity. 
 plot(fitted(M5),residuals(M5))
+
+#
+library("jtools")
+summ(M5)
+
+effect_plot(M2, pred = Variance, interval = TRUE, plot.points = TRUE)
+effect_plot(M5, pred = Trait)
+
+
+
+library("sjPlot")
+plot_model(M2, type = "pred", terms = c("Variance"))
+#this is close. I don't know how to add a regression line. Geom_smooth doesn't seem to work.
+plot_model(M2, type = "pred")
+plot_model(M3, type = "pred")
+plot_model(M4, type = "pred")
+plot_model(M5, type = "pred")
 
 # Running mixed effects models --------------------------------------------
 
@@ -291,6 +316,9 @@ ggplot(Retest, aes(x = Correlation)) +
   facet_wrap(~ Trait1, nrow = 3) +
   theme_bw() +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.border = element_blank(), axis.line = element_line(colour = "black")) 
+
+
+
 
 
 
