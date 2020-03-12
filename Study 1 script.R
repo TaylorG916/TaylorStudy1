@@ -32,6 +32,9 @@ install.packages("haven") #allows for importing SPSS files
 install.packages("scales") #Makes it easier to manipulate the y-axis for ggplots
 install.packages("devtools")
 remotes::install_github("krlmlr/here") #Here package
+install.packages("performance") #package that tests model assumptions
+install.packages("see") #to plot models from above package
+
 
 library("devtools")
 library("tidyverse") 
@@ -45,6 +48,9 @@ library("readxl")
 library("haven")
 library("scales")
 library("here")
+library("performance")
+library("see")
+
 
 # Convert data from wide to long format -----------------------------------
 
@@ -112,6 +118,15 @@ DataVar$...17 <- NULL
 DataVar$...18 <- NULL
 DataVar$...19 <- NULL
 
+DataVar$`RFamiliar explain` <- NULL
+
+#number images
+as.numeric(levels(DataVar$ImageID)[DataVar$ImageID])
+
+DataVar <- separate(DataVar, col = ImageID, into = c("drop","Imagenum"), sep = -2, convert = TRUE, remove =FALSE, extra = drop)
+
+
+
 #Convert columns into factors. This tells R to treat the categorical variables 
 #as factors. 
 DataVar$Trait <- factor(DataVar$Trait)
@@ -119,6 +134,8 @@ DataVar$ImageID <- factor(DataVar$ImageID)
 DataVar$Gender <- factor(DataVar$Gender)
 DataVar$`Familiar Yes/No` <- factor(DataVar$`Familiar Yes/No`)
 DataVar$Identity <- factor(DataVar$Identity) 
+DataVar$Imagenum <- factor(DataVar$Imagenum) 
+
 
 #Rename the levels of trait as 1 = Attractiveness, 2 = Dominance, 3 = Trustworthiness 
 factor(DataVar$Trait, levels = c("Attractiveness", "Dominance", "Trustworthiness"))
@@ -132,14 +149,11 @@ levels(DataVar$Identity) <- c("FA", "FB", "FC", "FD", "FE", "FF", "FG", "FH",
 write.csv(DataVar, file = "3_Mixed_Effects_Models.csv")
 
 # Mixed effects models ----------------------------------------------------
-
-DataVar <- read_excel(here("3_Mixed_Effects_Models.xlsx"))
-
-
+#Make sure this is the same file as above (make both the same format)
+DataVar <- read_csv(here("3_Mixed_Effects_Models.csv"))
 
 #Descriptive statistics across each trait
 describeBy(x = DataVar, group = DataVar$Trait)
-
 
 #We will conduct linear mixed effects models using the "lme4" package 
 #to investigate the influence of the type of trait and the identity of the 
@@ -149,58 +163,114 @@ describeBy(x = DataVar, group = DataVar$Trait)
 #The variability scores will be included as the dependent variable in each of 
 #the models. Participants were entered as a random effect. 
 
-#M1 is the null model that only includes the random effect.
-M1 <- lmer(Variance ~ (1|Participant), data = DataVar, REML = FALSE)
+#M1 is the null model that only includes the random effects.
+M1 <- lmer(Vaiance ~ (1|Participant) + (1|Imagenum), data = DataVar, REML = FALSE)
 
 #M2 includes Trait as a fixed effect
-M2 <- lmer(Variance ~ Trait + (1|Participant), data = DataVar, REML = FALSE)
+M2 <- lmer(Vaiance ~ Trait + (1|Participant) + (1|Imagenum), data = DataVar, REML = FALSE)
 
 #M3 includes identity as a fixed effect
-M3 <- lmer(Variance ~ Identity + (1|Participant), data = DataVar, REML = FALSE)
+M3 <- lmer(Vaiance ~ Identity + (1|Participant) + (1|Imagenum), data = DataVar, REML = FALSE)
 
 #M4 includes both trait and identity as a fixed effect
-M4 <- lmer(Variance ~ Trait + Identity + (1|Participant), data = DataVar, REML = FALSE)
+M4 <- lmer(Vaiance ~ Trait + Identity + (1|Participant) + (1|Imagenum), data = DataVar, REML = FALSE)
 
 #M5 is the final model which includes the interaction of trait and identity along
 #with the main effects of each. Using "*" computes the interaction as well as the
 #the main effects whereas ":" only computes the interaction. 
-M5 <- lmer(Variance ~ Trait*Identity + (1|Participant), data = DataVar, REML = FALSE)
+M5 <- lmer(Vaiance ~ Trait*Identity + (1|Participant) + (1|Imagenum), data = DataVar, REML = FALSE)
 
-#Random slopes models. This will take a long time to process. 
+M5old <- lmer(Variance ~ Trait*Identity + (1|Participant) + (1|ImageID), data = DataVar, REML = FALSE)
 
-M6 <- lmer(Variance ~ Trait*Identity + (1 + Identity|Participant), data = DataVar, REML = FALSE)
+#R considers zero values as negative values. But need to use a gamma distribution because it is continous data
+DataVar <- mutate(DataVar, Variance1 = Variance + 1)
 
-# Testing model fit -------------------------------------------------------
+GM1 <- glmer(Variance1 ~  (1|Participant) + (1|Imagenum), family = Gamma(link = "identity"), data = DataVar, REML = FALSE)
+GM2 <- glmer(Variance1 ~ Trait + (1|Participant) + (1|Imagenum),family = Gamma(link = "identity"), data = DataVar, REML = FALSE)
+GM3 <- glmer(Variance1 ~ Identity + (1|Participant) + (1|Imagenum), family = Gamma(link = "identity"), data = DataVar, REML = FALSE)
+GM4 <- glmer(Variance1 ~ Trait + Identity + (1|Participant) + (1|Imagenum), family = Gamma(link = "identity"), data = DataVar, REML = FALSE)
+GM5 <- glmer(Variance1 ~ Trait*Identity + (1|Participant) + (1|Imagenum), family = Gamma(link = "identity"), data = DataVar, REML = FALSE)
 
-#First need to convert Variance into numeric (but need to code as 1-17 for it 
-#to work). otherwise the geom_smooth won't plot a line. 
+GM6 <- glmer(Variance1 ~ Trait*Identity + (1|Participant) + (1|Imagenum), family = Gamma(link = "log"), data = DataVar, REML = FALSE)
 
-levels(DataVar$Identity) <- c("1", "2", "3", "4", "5", "6", "7", "8", 
-                              "9", "10", "11", "12", "13", "14", "15", "16", "17")
+anova(GM1, GM2, GM3, GM4, GM5)
+anova(GM5)
+summary(GM5)
+check_model(M5)
 
-#Does the data need to be numeric for geom_smooth?
-DataVar$Identity <- as.numeric(as.character(DataVar$Identity))
+GM1 <- glmer(Vaiance1 ~  (1|Participant) + (1|Imagenum), family = poisson(link = "log"), data = DataVar)
 
-#This should plot a line for each model.
+# Visualise predicted values ----------------------------------------------
 
-#Geom_smooth isn't working. For some reason it won't plot the line
-ggplot(M5, aes(x = Identity, y = Variance, colour = Trait)) +
+#use the "performance" and "see" package. It will give you plots of a model for 
+#different assumptions
+check_model(GM5)
+
+#This compares across models for different indicies. A bit hard to interpret
+plot(compare_performance(GM1, GM2, GM3, GM4, GM5, rank = TRUE))
+
+#these give you the predicted and residual values for each model and adds it to the dataset
+DataVar$modelfitGM1 <- predict(GM1)
+DataVar$residualsGM1 <- residuals(GM1)
+
+DataVar$modelfitGM2 <- predict(GM2)
+DataVar$residualsGM2 <- residuals(GM2)
+
+DataVar$modelfitGM3 <- predict(GM3)
+DataVar$residualsGM3 <- residuals(GM3)
+
+DataVar$modelfitGM4 <- predict(GM4)
+DataVar$residualsGM4 <- residuals(GM4)
+
+DataVar$modelfitGM5 <- predict(GM5)
+DataVar$residualsGM5 <- residuals(GM5)
+
+DataVar$modelfitM5old <- predict(M5old)
+DataVar$residualsM5old <- residuals(M5old)
+
+
+#This is very close
+#the method makes a noticable difference. use "auto" becuase there are more than 
+#1000 observations
+DataVar %>% 
+  ggplot(aes(y = residualsGM1, x = modelfitGM1)) +
   geom_point() +
-  geom_smooth(method = lm) 
+  geom_smooth(method = "auto") +
+  facet_wrap(Trait ~ Identity)
 
-#This does not look right at all
- ggplot(M5, aes(x = Identity, y = Variance, colour = Trait)) +
-   geom_point() +
-   geom_abline() 
+DataVar %>% 
+  ggplot(aes(y = residualsM5, x = modelfitM5)) +
+  geom_point() +
+  geom_smooth(method = "auto") +
+  facet_wrap(~Trait)
 
-  
+
+#This will plot the predicted and residual values for each model. Make sure the scales
+# are fixed to help draw comparisons. 
+
+DataVar %>%  
+  ggplot(aes(y = residualsGM5, x = modelfitGM5)) +
+  geom_point() +
+  geom_hline(yintercept = 0) +
+  #ylim(-2, 2) +
+  #xlim(0.5, 4) +
+  facet_wrap(Identity~Trait)
+
+
+DataVar %>% 
+ggplot(aes(y = Variance, x = Identity, colour = Imagenum)) +
+  geom_jitter() +
+  facet_wrap(~ Trait)
+
+
+ 
 #histogram and qqplot to test for normality of residuals for M5. 
 qqnorm(resid(M5))
 
 hist(residuals(M5))
 
 #Residual plot for homoscedasticity. 
-plot(fitted(M5),residuals(M5))
+plot(fitted(GM5),residuals(GM5))
 
 #
 library("jtools")
@@ -210,7 +280,6 @@ effect_plot(M2, pred = Variance, interval = TRUE, plot.points = TRUE)
 effect_plot(M5, pred = Trait)
 
 
-
 library("sjPlot")
 plot_model(M2, type = "pred", terms = c("Variance"))
 #this is close. I don't know how to add a regression line. Geom_smooth doesn't seem to work.
@@ -218,6 +287,9 @@ plot_model(M2, type = "pred")
 plot_model(M3, type = "pred")
 plot_model(M4, type = "pred")
 plot_model(M5, type = "pred")
+plot_model(M7, type = "pred")
+plot_model(M9, type = "pred")
+
 
 # Running mixed effects models --------------------------------------------
 
